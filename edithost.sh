@@ -28,14 +28,14 @@ function addHost() {
   read -p '请输入主机Host: ' host
   [[ -z $host ]] && echo '主机Host不能为空'
 
-  read -p '请输入主机端口: ' port
-  [[ -z $port ]] && echo '主机端口不能为空'
+  read -p '请输入主机端口(22): ' port
+  [[ -z $port ]] && port=22
 
-  read -p '请输入登录用户名: ' user
-  [[ -z $user ]] && echo '登录用户不能为空'
+  read -p '请输入登录用户名(root): ' user
+  [[ -z $user ]] && user='root'
 
-  read -s -p '请输入登录密码: ' passwd
-  [[ -z $passwd ]] && echo '登录密码不能为空'
+  read -s -p '请输入登录密码(不填则使用免密登录): ' passwd
+  [[ -z $passwd ]] && echo '将使用默认私钥登录'
   echo
 
   read -p '请输入主机描述: ' desc
@@ -76,50 +76,53 @@ function delHost() {
 #格式id|host|port|user|passwd|logintimes|desc id|host|port|user|passwd|logintimes|desc
 # shellcheck disable=SC2120
 function listHost() {
-
-  echo "序号 |       主机       | 连接次数 | 说明"
-
+  local where="$1"
+  
   whereSql=''
-  [[ -n $1 ]] && whereSql='where '$1' '
+  [[ -n $where ]] && whereSql="where $where "
   orderSql=' order by "LOGIN_TIMES" DESC'
   selectSql='select "ID","HOST","PORT","USER","PASSWD","LOGIN_TIMES","DESC" from "host"'$whereSql$orderSql';'
 
   #  echo $selectSql
 
   selectResult=$(sqlite3 $dbName "$selectSql")
-  #格式id|host|port|user|passwd|logintimes|desc id|host|port|user|passwd|logintimes|desc
+  printHostList "$selectResult"
+}
 
+function printHostList() {
+  local selectResult=$1
+  #格式id|host|port|user|passwd|logintimes|desc id|host|port|user|passwd|logintimes|desc
+  echo "序号 |       主机       | 连接次数 | 说明"
+  
   selectResultArr=(${selectResult//\ / })
   selectResultArrSize=${#selectResultArr[*]}
 
   # shellcheck disable=SC2068
   for hostItem in ${selectResultArr[@]}; do
-    hostItemReturn=$hostItem
-
     #格式id|host|port|user|passwd|logintimes|desc
-    hostItemArr=(${hostItem//|/ })
     id=host=port=user=passwd=logintimes=desc=''
-    arrSize=${#hostItemArr[*]}
 
-    #echo 'ssssize'$arrSize
+    #字段赋值
+    oldIFS=$IFS
+    IFS="|"
+    count=0
+    for item in $hostItem
+    do
+      [ $count -eq 0 ] && id=$item
+      [ $count -eq 1 ] && host=$item
+      [ $count -eq 2 ] && port=$item
+      [ $count -eq 3 ] && user=$item
+      [ $count -eq 4 ] && passwd=$item
+      [ $count -eq 5 ] && logintimes=$item
+      [ $count -eq 6 ] && desc=$item
+      let count++
+    done
+    IFS=$oldIFS
 
-    #取出7个字段
-    if [[ $arrSize == 7 ]]; then
-      id=${hostItemArr[0]}
-      host=${hostItemArr[1]}
-      port=${hostItemArr[2]}
-      user=${hostItemArr[3]}
-      passwd=${hostItemArr[4]}
-      logintimes=${hostItemArr[5]}
-      desc=${hostItemArr[6]}
-      printf "\033[0;31m% 3s \033[m | %16s | %9s| %s\n" $id $host $logintimes $desc
-    fi
+    printf "\033[0;33m% 3s \033[m | %16s | %9s| %s\n" $id $host $logintimes $desc
 
   done
-
-  #返回一个
-  [[ $selectResultArrSize != 1 ]] && hostItemReturn=''
-  echo $hostItemReturn >listHost.tmp
+  echo
 }
 
 function updateHost() {
